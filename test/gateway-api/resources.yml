@@ -143,3 +143,21 @@ spec:
       backendRefs:
         - name: backend
           port: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: myservicegrpc
+  namespace: default
+spec:
+  parentRefs:
+    - name: gateway-one
+  hostnames: ["myservicegrpc.gw.foo.org"]
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: backend
+          port: 443
