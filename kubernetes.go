@@ -11,6 +11,7 @@ import (
 	"github.com/miekg/dns"
 	nginx_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	k8s_nginx "github.com/nginxinc/kubernetes-ingress/pkg/client/clientset/versioned"
+	gw_api "github.com/ori-edge/k8s_gateway/gateway-api"
 	core "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -70,46 +71,24 @@ func newKubeController(ctx context.Context, c *kubernetes.Clientset, gw *gateway
 		)
 		ctrl.controllers = append(ctrl.controllers, gatewayController)
 
-		if resource := lookupResource("HTTPRoute"); resource != nil {
-			httpRouteController := cache.NewSharedIndexInformer(
-				&cache.ListWatch{
-					ListFunc:  httpRouteLister(ctx, ctrl.gwClient, core.NamespaceAll),
-					WatchFunc: httpRouteWatcher(ctx, ctrl.gwClient, core.NamespaceAll),
-				},
-				&gatewayapi_v1.HTTPRoute{},
-				defaultResyncPeriod,
-				cache.Indexers{httpRouteHostnameIndex: httpRouteHostnameIndexFunc},
-			)
-			resource.lookup = lookupHttpRouteIndex(httpRouteController, gatewayController)
-			ctrl.controllers = append(ctrl.controllers, httpRouteController)
+		err := setupRouteController(ctx, gatewayController, ctrl, "HTTPRoute", "v1")
+		if err != nil {
+			log.Fatalf("Failed to set up HTTPRoute v1 controller: %v", err)
 		}
 
-		if resource := lookupResource("TLSRoute"); resource != nil {
-			tlsRouteController := cache.NewSharedIndexInformer(
-				&cache.ListWatch{
-					ListFunc:  tlsRouteLister(ctx, ctrl.gwClient, core.NamespaceAll),
-					WatchFunc: tlsRouteWatcher(ctx, ctrl.gwClient, core.NamespaceAll),
-				},
-				&gatewayapi_v1alpha2.TLSRoute{},
-				defaultResyncPeriod,
-				cache.Indexers{tlsRouteHostnameIndex: tlsRouteHostnameIndexFunc},
-			)
-			resource.lookup = lookupTLSRouteIndex(tlsRouteController, gatewayController)
-			ctrl.controllers = append(ctrl.controllers, tlsRouteController)
+		err = setupRouteController(ctx, gatewayController, ctrl, "TLSRoute", "v1alpha2")
+		if err != nil {
+			log.Fatalf("Failed to set up TLSRoute v1alpha2 controller: %v", err)
 		}
 
-		if resource := lookupResource("GRPCRoute"); resource != nil {
-			grpcRouteController := cache.NewSharedIndexInformer(
-				&cache.ListWatch{
-					ListFunc:  grpcRouteLister(ctx, ctrl.gwClient, core.NamespaceAll),
-					WatchFunc: grpcRouteWatcher(ctx, ctrl.gwClient, core.NamespaceAll),
-				},
-				&gatewayapi_v1.GRPCRoute{},
-				defaultResyncPeriod,
-				cache.Indexers{grpcRouteHostnameIndex: grpcRouteHostnameIndexFunc},
-			)
-			resource.lookup = lookupGRPCRouteIndex(grpcRouteController, gatewayController)
-			ctrl.controllers = append(ctrl.controllers, grpcRouteController)
+		err = setupRouteController(ctx, gatewayController, ctrl, "GRPCRoute", "v1")
+		if err != nil {
+			log.Fatalf("Failed to set up GRPCRoute v1 controller: %v", err)
+		}
+
+		err = setupRouteController(ctx, gatewayController, ctrl, "GRPCRoute", "v1alpha2")
+		if err != nil {
+			log.Fatalf("Failed to set up GRPCRoute v1alpha2 controller: %v", err)
 		}
 	}
 
@@ -257,24 +236,6 @@ func (gw *Gateway) getClientConfig() (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func httpRouteLister(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (runtime.Object, error) {
-	return func(opts metav1.ListOptions) (runtime.Object, error) {
-		return c.GatewayV1().HTTPRoutes(ns).List(ctx, opts)
-	}
-}
-
-func tlsRouteLister(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (runtime.Object, error) {
-	return func(opts metav1.ListOptions) (runtime.Object, error) {
-		return c.GatewayV1alpha2().TLSRoutes(ns).List(ctx, opts)
-	}
-}
-
-func grpcRouteLister(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (runtime.Object, error) {
-	return func(opts metav1.ListOptions) (runtime.Object, error) {
-		return c.GatewayV1().GRPCRoutes(ns).List(ctx, opts)
-	}
-}
-
 func gatewayLister(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (runtime.Object, error) {
 	return func(opts metav1.ListOptions) (runtime.Object, error) {
 		return c.GatewayV1().Gateways(ns).List(ctx, opts)
@@ -296,24 +257,6 @@ func serviceLister(ctx context.Context, c kubernetes.Interface, ns string) func(
 func virtualServerLister(ctx context.Context, c k8s_nginx.Interface, ns string) func(metav1.ListOptions) (runtime.Object, error) {
 	return func(opts metav1.ListOptions) (runtime.Object, error) {
 		return c.K8sV1().VirtualServers(ns).List(ctx, opts)
-	}
-}
-
-func httpRouteWatcher(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (watch.Interface, error) {
-	return func(opts metav1.ListOptions) (watch.Interface, error) {
-		return c.GatewayV1().HTTPRoutes(ns).Watch(ctx, opts)
-	}
-}
-
-func tlsRouteWatcher(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (watch.Interface, error) {
-	return func(opts metav1.ListOptions) (watch.Interface, error) {
-		return c.GatewayV1alpha2().TLSRoutes(ns).Watch(ctx, opts)
-	}
-}
-
-func grpcRouteWatcher(ctx context.Context, c gatewayClient.Interface, ns string) func(metav1.ListOptions) (watch.Interface, error) {
-	return func(opts metav1.ListOptions) (watch.Interface, error) {
-		return c.GatewayV1().GRPCRoutes(ns).Watch(ctx, opts)
 	}
 }
 
@@ -348,48 +291,6 @@ func gatewayIndexFunc(obj interface{}) ([]string, error) {
 		return []string{""}, fmt.Errorf("object has no meta: %v", err)
 	}
 	return []string{fmt.Sprintf("%s/%s", metaObj.GetNamespace(), metaObj.GetName())}, nil
-}
-
-func httpRouteHostnameIndexFunc(obj interface{}) ([]string, error) {
-	httpRoute, ok := obj.(*gatewayapi_v1.HTTPRoute)
-	if !ok {
-		return []string{}, nil
-	}
-
-	var hostnames []string
-	for _, hostname := range httpRoute.Spec.Hostnames {
-		log.Debugf("Adding index %s for httpRoute %s", httpRoute.Name, hostname)
-		hostnames = append(hostnames, string(hostname))
-	}
-	return hostnames, nil
-}
-
-func tlsRouteHostnameIndexFunc(obj interface{}) ([]string, error) {
-	tlsRoute, ok := obj.(*gatewayapi_v1alpha2.TLSRoute)
-	if !ok {
-		return []string{}, nil
-	}
-
-	var hostnames []string
-	for _, hostname := range tlsRoute.Spec.Hostnames {
-		log.Debugf("Adding index %s for tlsRoute %s", tlsRoute.Name, hostname)
-		hostnames = append(hostnames, string(hostname))
-	}
-	return hostnames, nil
-}
-
-func grpcRouteHostnameIndexFunc(obj interface{}) ([]string, error) {
-	grpcRoute, ok := obj.(*gatewayapi_v1.GRPCRoute)
-	if !ok {
-		return []string{}, nil
-	}
-
-	var hostnames []string
-	for _, hostname := range grpcRoute.Spec.Hostnames {
-		log.Debugf("Adding index %s for grpcRoute %s", grpcRoute.Name, hostname)
-		hostnames = append(hostnames, string(hostname))
-	}
-	return hostnames, nil
 }
 
 func ingressHostnameIndexFunc(obj interface{}) ([]string, error) {
@@ -500,57 +401,6 @@ func lookupVirtualServerIndex(ctrl cache.SharedIndexInformer) func([]string) []n
 				}
 				result = append(result, addr)
 			}
-		}
-		return
-	}
-}
-
-func lookupHttpRouteIndex(http, gw cache.SharedIndexInformer) func([]string) []netip.Addr {
-	return func(indexKeys []string) (result []netip.Addr) {
-		var objs []interface{}
-		for _, key := range indexKeys {
-			obj, _ := http.GetIndexer().ByIndex(httpRouteHostnameIndex, strings.ToLower(key))
-			objs = append(objs, obj...)
-		}
-		log.Debugf("Found %d matching httpRoute objects", len(objs))
-
-		for _, obj := range objs {
-			httpRoute, _ := obj.(*gatewayapi_v1.HTTPRoute)
-			result = append(result, lookupGateways(gw, httpRoute.Spec.ParentRefs, httpRoute.Namespace)...)
-		}
-		return
-	}
-}
-
-func lookupTLSRouteIndex(tls, gw cache.SharedIndexInformer) func([]string) []netip.Addr {
-	return func(indexKeys []string) (result []netip.Addr) {
-		var objs []interface{}
-		for _, key := range indexKeys {
-			obj, _ := tls.GetIndexer().ByIndex(tlsRouteHostnameIndex, strings.ToLower(key))
-			objs = append(objs, obj...)
-		}
-		log.Debugf("Found %d matching tlsRoute objects", len(objs))
-
-		for _, obj := range objs {
-			tlsRoute, _ := obj.(*gatewayapi_v1alpha2.TLSRoute)
-			result = append(result, lookupGateways(gw, tlsRoute.Spec.ParentRefs, tlsRoute.Namespace)...)
-		}
-		return
-	}
-}
-
-func lookupGRPCRouteIndex(grpc, gw cache.SharedIndexInformer) func([]string) []netip.Addr {
-	return func(indexKeys []string) (result []netip.Addr) {
-		var objs []interface{}
-		for _, key := range indexKeys {
-			obj, _ := grpc.GetIndexer().ByIndex(grpcRouteHostnameIndex, strings.ToLower(key))
-			objs = append(objs, obj...)
-		}
-		log.Debugf("Found %d matching grpcRoute objects", len(objs))
-
-		for _, obj := range objs {
-			grpcRoute, _ := obj.(*gatewayapi_v1.GRPCRoute)
-			result = append(result, lookupGateways(gw, grpcRoute.Spec.ParentRefs, grpcRoute.Namespace)...)
 		}
 		return
 	}
@@ -671,6 +521,108 @@ func fetchIngressLoadBalancerIPs(ingresses []networking.IngressLoadBalancerIngre
 		}
 	}
 	return
+}
+
+func setupRouteController(ctx context.Context, gatewayController cache.SharedIndexInformer, ctrl *KubeController, routeType, version string) error {
+	resource := lookupResource(routeType)
+	if resource == nil {
+		return fmt.Errorf("%s resource not found", routeType)
+	}
+
+	versionedRoute, err := gw_api.GetRouteVersion(routeType, version)
+	if err != nil {
+		return err
+	}
+
+	routeController := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc:  versionedRoute.NewLister(ctx, ctrl.gwClient, core.NamespaceAll),
+			WatchFunc: versionedRoute.NewWatcher(ctx, ctrl.gwClient, core.NamespaceAll),
+		},
+		versionedRoute.NewObject(),
+		defaultResyncPeriod,
+		cache.Indexers{"hostname": routeHostnameIndexFunc},
+	)
+
+	resource.lookup = lookupRouteIndex(routeController, gatewayController)
+	ctrl.controllers = append(ctrl.controllers, routeController)
+
+	return nil
+}
+
+func routeHostnameIndexFunc(obj interface{}) ([]string, error) {
+	// Type assert the object to the correct route type.
+	// You might need to handle multiple types if the function is shared among different route types.
+	switch route := obj.(type) {
+	case *gatewayapi_v1.HTTPRoute:
+		var hostnames []string
+		for _, hostname := range route.Spec.Hostnames {
+			theRoute := obj.(*gatewayapi_v1.HTTPRoute)
+			log.Debugf("Adding index %s for httpRoute %s", theRoute.Name, hostname)
+			hostnames = append(hostnames, string(hostname))
+		}
+		return hostnames, nil
+	case *gatewayapi_v1.GRPCRoute:
+		var hostnames []string
+		for _, hostname := range route.Spec.Hostnames {
+			theRoute := obj.(*gatewayapi_v1.GRPCRoute)
+			log.Debugf("Adding index %s for grpcRoute v1 %s", theRoute.Name, hostname)
+			hostnames = append(hostnames, string(hostname))
+		}
+		return hostnames, nil
+	case *gatewayapi_v1alpha2.GRPCRoute:
+		var hostnames []string
+		for _, hostname := range route.Spec.Hostnames {
+			theRoute := obj.(*gatewayapi_v1alpha2.GRPCRoute)
+			log.Debugf("Adding index %s for grpcRoute v1alpha2 %s", theRoute.Name, hostname)
+			hostnames = append(hostnames, string(hostname))
+		}
+		return hostnames, nil
+	case *gatewayapi_v1alpha2.TLSRoute:
+		var hostnames []string
+		for _, hostname := range route.Spec.Hostnames {
+			theRoute := obj.(*gatewayapi_v1alpha2.TLSRoute)
+			log.Debugf("Adding index %s for tlsRoute v1alpha2 %s", theRoute.Name, hostname)
+			hostnames = append(hostnames, string(hostname))
+		}
+		return hostnames, nil
+	default:
+		return nil, fmt.Errorf("unexpected object type: %T", obj)
+	}
+}
+
+func lookupRouteIndex(grpcInformer, gwInformer cache.SharedIndexInformer) func([]string) []netip.Addr {
+	return func(indexKeys []string) (result []netip.Addr) {
+		var objs []interface{}
+		for _, key := range indexKeys {
+			// Lookup in GRPCRoute Informer
+			grpcObjs, _ := grpcInformer.GetIndexer().ByIndex("hostname", strings.ToLower(key))
+			objs = append(objs, grpcObjs...)
+
+			// Lookup in Gateway Informer (e.g., HTTPRoute, TLSRoute)
+			gwObjs, _ := gwInformer.GetIndexer().ByIndex("hostname", strings.ToLower(key))
+			objs = append(objs, gwObjs...)
+		}
+
+		log.Debugf("Found %d matching route objects", len(objs))
+
+		for _, obj := range objs {
+			switch route := obj.(type) {
+			case *gatewayapi_v1.GRPCRoute:
+			case *gatewayapi_v1alpha2.GRPCRoute:
+				result = append(result, lookupGateways(gwInformer, route.Spec.ParentRefs, route.Namespace)...)
+			case *gatewayapi_v1.HTTPRoute:
+				result = append(result, lookupGateways(gwInformer, route.Spec.ParentRefs, route.Namespace)...)
+			case *gatewayapi_v1alpha2.TLSRoute:
+				result = append(result, lookupGateways(gwInformer, route.Spec.ParentRefs, route.Namespace)...)
+			// Add more cases for other route types
+			default:
+				log.Warningf("Unhandled route type: %T", route)
+			}
+		}
+
+		return result
+	}
 }
 
 // the below is borrowed from k/k's github repo

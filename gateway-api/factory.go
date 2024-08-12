@@ -14,16 +14,6 @@ func GetRouteVersion(routeType, version string) (RouteVersionInterface, error) {
 		case "v1alpha2":
 			return &TLSRouteV1alpha2{}, nil
 		}
-	case "UDPRoute":
-		switch version {
-		case "v1alpha2":
-			return &UDPRouteV1alpha2{}, nil
-		}
-	case "TCPRoute":
-		switch version {
-		case "v1alpha2":
-			return &TCPRouteV1alpha2{}, nil
-		}
 	case "GRPCRoute":
 		switch version {
 		case "v1alpha2":

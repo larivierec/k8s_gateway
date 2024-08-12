@@ -80,21 +80,21 @@ func TestController(t *testing.T) {
 	}
 
 	for index, testObj := range testHTTPRoutes {
-		found, _ := httpRouteHostnameIndexFunc(testObj)
+		found, _ := routeHostnameIndexFunc(testObj)
 		if !isFound(index, found) {
 			t.Errorf("HTTPRoute key %s not found in index: %v", index, found)
 		}
 	}
 
 	for index, testObj := range testTLSRoutes {
-		found, _ := tlsRouteHostnameIndexFunc(testObj)
+		found, _ := routeHostnameIndexFunc(testObj)
 		if !isFound(index, found) {
 			t.Errorf("TLSRoute key %s not found in index: %v", index, found)
 		}
 	}
 
 	for index, testObj := range testGRPCRoutes {
-		found, _ := grpcRouteHostnameIndexFunc(testObj)
+		found, _ := routeHostnameIndexFunc(testObj)
 		if !isFound(index, found) {
 			t.Errorf("GRPC key %s not found in index: %v", index, found)
 		}

@@ -87,7 +87,6 @@ func newGateway() *Gateway {
 }
 
 func lookupResource(resource string) *resourceWithIndex {
-
 	for _, r := range orderedResources {
 		if r.name == resource {
 			return r
