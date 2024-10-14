@@ -243,7 +243,7 @@ func (gw *Gateway) RunKubeController(ctx context.Context) error {
 
 	externaldnsCRDClient, externaldnsScheme, err = source.NewCRDClientForAPIVersionKind(kubeClient, gw.configFile, "", externalDNSEndpointGroup, externalDNSEndpointKind)
 	if err != nil {
-		return err
+		log.Warningf("crd %s not found. ignoring and continuing execution", externalDNSEndpointGroup)
 	}
 
 	gw.Controller = newKubeController(ctx, kubeClient, gwAPIClient, nginxClient)
@@ -256,7 +256,7 @@ func (gw *Gateway) RunKubeController(ctx context.Context) error {
 func crdExists(clientset *apiextensionsclientset.Clientset, crdName string) bool {
 	_, err := clientset.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 	if err != nil {
-		log.Errorf("error getting crd %s, error: %s", crdName, err.Error())
+		log.Warningf("error getting crd %s, error: %s", crdName, err.Error())
 	} else {
 		log.Infof("crd %s found", crdName)
 	}
